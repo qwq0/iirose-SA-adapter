@@ -7283,6 +7283,13 @@ const operateList = {
 };
 
 /**
+ * trie树回退信号
+ * 节点的回调函数返回此值时回退到上一级
+ */
+let trieRollbackSymbol = Symbol("trieRollbackSymbol");
+
+
+/**
  * 字典树
  */
 class Trie
@@ -7371,7 +7378,13 @@ class TrieNode
         {
             let child = this.#childs.get(str[strInd]);
             if (child != undefined)
-                return child.matchPrefix(str, strInd + 1);
+            {
+                let ret = child.matchPrefix(str, strInd + 1);
+                if (ret == trieRollbackSymbol)
+                    return this.#callback?.(str.slice(strInd), str);
+                else
+                    return ret;
+            }
             else
                 return this.#callback?.(str.slice(strInd), str);
         }
@@ -7405,6 +7418,7 @@ s2cTrie.addPath(`%*"*`, (data) =>
     part[3].split(`<`).map(o => o.split(">"));
 
     state.context.userId = myInfo[6];
+    state.context.logined = true;
     state.context.event.logined.trigger();
 });
 
@@ -7490,6 +7504,9 @@ s2cTrie.addPath(`>`, (data) =>
 // 房间切换
 s2cTrie.addPath(`%*"s`, (data) =>
 {
+    if(state.context.logined)
+        return trieRollbackSymbol;
+
     let part = data.split(">");
     let roomId = part[0];
     let roomName = part[1];
@@ -7522,6 +7539,10 @@ class IiroseProtocol
      * 当前所在房间id
      */
     roomId = "";
+    /**
+     * 当前已登录
+     */
+    logined = false;
 
     /**
      * 协议向服务器发送数据包
@@ -7533,6 +7554,11 @@ class IiroseProtocol
      * 所有事件
      */
     event = {
+        /**
+         * 收到封包时触发
+         * @type {EventHandler<string>}
+         */
+        raw: new EventHandler(),
         /**
          * 已登录
          */
@@ -7619,6 +7645,7 @@ class IiroseProtocol
         this.userName = username;
         this.userId = "";
         this.roomId = roomId;
+        this.logined = false;
         this.sendPacket('*' + JSON.stringify({
             "r": roomId, // room id
             "n": username, // user id
@@ -7650,7 +7677,9 @@ class IiroseProtocol
      */
     #handleDataPacket(data)
     {
-        // console.log(data);
+        if (this.event.raw.existListener())
+            this.event.raw.trigger(data);
+
         state.context = this;
         s2cTrie.matchPrefix(data);
         state.context = null;
@@ -7683,13 +7712,24 @@ const saApi = api;
     /** @type {WebSocket} */
     let ws = null;
 
+    let lastRawData = "";
+    protocol.event.raw.add(data =>
+    {
+        lastRawData = data;
+    });
     Object.keys(protocol.event).forEach(key =>
     {
-        protocol.event[key].add(e =>
-        {
-            console.log(`[iirose-protocol] event ${key}`, e);
-        });
+        if (key != "raw")
+            protocol.event[key].add(e =>
+            {
+                console.log(`[iirose-protocol] event ${key}`, e, lastRawData);
+            });
     });
+
+    /**
+     * @type {number | NodeJS.Timeout | null}
+     */
+    let reconnectingTimeoutId = null;
 
     /**
      * @param {string} userId
@@ -7698,6 +7738,12 @@ const saApi = api;
      */
     function rebindWebSocket(userId, password, roomId)
     {
+        if (reconnectingTimeoutId != null)
+        {
+            // @ts-ignore
+            clearTimeout(reconnectingTimeoutId);
+            reconnectingTimeoutId = null;
+        }
         if (ws)
             ws.close();
 
@@ -7723,7 +7769,18 @@ const saApi = api;
         ws.addEventListener("close", e =>
         {
             if (ws == e.target)
+            {
                 saApi.eventCallback.connectionStateChange("offline");
+                reconnectingTimeoutId = setTimeout(() =>
+                {
+                    reconnectingTimeoutId = null;
+                    if (ws.readyState == WebSocket.CLOSED || ws.readyState == WebSocket.CLOSING)
+                    {
+                        console.log("[iirose_SA_adapter] reconnecting");
+                        rebindWebSocket(userId, password, roomId);
+                    }
+                }, 10 * 1000);
+            }
         });
 
         saApi.eventCallback.connectionStateChange("connecting");
@@ -7758,6 +7815,16 @@ const saApi = api;
     {
         saApi.eventCallback.receiveMessage({
             senderId: e.senderId,
+            messageContent: e.content,
+            sessionId: "room-" + protocol.roomId
+        });
+    });
+
+
+    protocol.event.selfRoomMessage.add(e =>
+    {
+        saApi.eventCallback.receiveMessage({
+            senderId: protocol.userId,
             messageContent: e.content,
             sessionId: "room-" + protocol.roomId
         });

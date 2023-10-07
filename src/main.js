@@ -1,5 +1,5 @@
-import { IiroseProtocol } from "../lib/iirose_protocol";
-import { saApi } from "./api";
+import { IiroseProtocol } from "../lib/iirose_protocol.js";
+import { saApi } from "./api.js";
 
 (async () =>
 {
@@ -7,13 +7,24 @@ import { saApi } from "./api";
     /** @type {WebSocket} */
     let ws = null;
 
+    let lastRawData = "";
+    protocol.event.raw.add(data =>
+    {
+        lastRawData = data;
+    });
     Object.keys(protocol.event).forEach(key =>
     {
-        protocol.event[key].add(e =>
-        {
-            console.log(`[iirose-protocol] event ${key}`, e);
-        });
+        if (key != "raw")
+            protocol.event[key].add(e =>
+            {
+                console.log(`[iirose-protocol] event ${key}`, e, lastRawData);
+            });
     });
+
+    /**
+     * @type {number | NodeJS.Timeout | null}
+     */
+    let reconnectingTimeoutId = null;
 
     /**
      * @param {string} userId
@@ -22,6 +33,12 @@ import { saApi } from "./api";
      */
     function rebindWebSocket(userId, password, roomId)
     {
+        if (reconnectingTimeoutId != null)
+        {
+            // @ts-ignore
+            clearTimeout(reconnectingTimeoutId);
+            reconnectingTimeoutId = null;
+        }
         if (ws)
             ws.close();
 
@@ -47,7 +64,18 @@ import { saApi } from "./api";
         ws.addEventListener("close", e =>
         {
             if (ws == e.target)
+            {
                 saApi.eventCallback.connectionStateChange("offline");
+                reconnectingTimeoutId = setTimeout(() =>
+                {
+                    reconnectingTimeoutId = null;
+                    if (ws.readyState == WebSocket.CLOSED || ws.readyState == WebSocket.CLOSING)
+                    {
+                        console.log("[iirose_SA_adapter] reconnecting");
+                        rebindWebSocket(userId, password, roomId);
+                    }
+                }, 10 * 1000);
+            }
         });
 
         saApi.eventCallback.connectionStateChange("connecting");
@@ -82,6 +110,16 @@ import { saApi } from "./api";
     {
         saApi.eventCallback.receiveMessage({
             senderId: e.senderId,
+            messageContent: e.content,
+            sessionId: "room-" + protocol.roomId
+        });
+    });
+
+
+    protocol.event.selfRoomMessage.add(e =>
+    {
+        saApi.eventCallback.receiveMessage({
+            senderId: protocol.userId,
             messageContent: e.content,
             sessionId: "room-" + protocol.roomId
         });

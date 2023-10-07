@@ -70,6 +70,10 @@ declare class IiroseProtocol {
      */
     roomId: string;
     /**
+     * 当前已登录
+     */
+    logined: boolean;
+    /**
      * 协议向服务器发送数据包
      * @type {EventHandler<Uint8Array>}
      */
@@ -78,6 +82,11 @@ declare class IiroseProtocol {
      * 所有事件
      */
     event: {
+        /**
+         * 收到封包时触发
+         * @type {EventHandler<string>}
+         */
+        raw: EventHandler<string>;
         /**
          * 已登录
          */
@@ -161,11 +170,10 @@ declare class IiroseProtocol {
         getRoseStockInfo: () => Promise<{
             totalStockQuantity: number;
             totalStockValue: number;
-            /**
+            price: number;
+            holdingQuantity: number; /**
              * 所有事件
              */
-            price: number;
-            holdingQuantity: number;
             accountBalance: number;
         }>;
         throwDice: (targetBot: "艾洛" | "艾莉" | "艾瑞" | "艾薇" | "艾泽" | "艾花" | "艾A" | "艾B") => void;
