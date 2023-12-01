@@ -53,6 +53,185 @@ declare class EventHandler<T extends unknown> {
     #private;
 }
 
+declare const reverseStateTable$1: {
+    n: string;
+    "0": string;
+    "1": string;
+    "2": string;
+    "3": string;
+    "4": string;
+    "5": string;
+    "6": string;
+    "7": string;
+    "8": string;
+    "9": string;
+    a: string;
+    b: string;
+    c: string;
+    d: string;
+    e: string;
+    f: string;
+};
+
+/**
+ * @typedef {typeof import("../serverToClient/receiveMessage.js").reverseStateTable} reverseStateTable
+ */
+/**
+ * 协议上下文的所有事件
+ */
+declare class ContextEvent {
+    /**
+     * 收到封包时触发
+     * @type {EventHandler<string>}
+     */
+    raw: EventHandler<string>;
+    /**
+     * 已登录
+     * @type {EventHandler<void>}
+     */
+    logined: EventHandler<void>;
+    /**
+     * 收到房间消息
+     * @type {EventHandler<{
+     *  senderId: string,
+     *  senderName: string,
+     *  content: string,
+     *  messageId: string
+     * }>}
+     */
+    roomMessage: EventHandler<{
+        senderId: string;
+        senderName: string;
+        content: string;
+        messageId: string;
+    }>;
+    /**
+     * 收到自己发送的房间消息
+     * @type {EventHandler<{
+     *  content: string,
+     *  messageId: string
+     * }>}
+     */
+    selfRoomMessage: EventHandler<{
+        content: string;
+        messageId: string;
+    }>;
+    /**
+     * 收到私聊消息
+     * @type {EventHandler<{
+     *  senderId: string,
+     *  senderName: string,
+     *  content: string,
+     *  messageId: string
+     * }>}
+     */
+    privateMessage: EventHandler<{
+        senderId: string;
+        senderName: string;
+        content: string;
+        messageId: string;
+    }>;
+    /**
+     * 接受到自己发送给自己的私聊消息
+     * @type {EventHandler<{
+     *  content: string,
+     *  messageId: string
+     * }>}
+     */
+    selfPrivateMessage: EventHandler<{
+        content: string;
+        messageId: string;
+    }>;
+    /**
+     * 收到全局频道(弹幕)消息
+     * @type {EventHandler<{
+     *  senderId: string,
+     *  senderName: string,
+     *  content: string
+     * }>}
+     */
+    globalChannelMessage: EventHandler<{
+        senderId: string;
+        senderName: string;
+        content: string;
+    }>;
+    /**
+     * 需要切换房间
+     * @type {EventHandler<{
+     *  roomId: string,
+     *  roomName: string
+     * }>}
+     */
+    switchRoom: EventHandler<{
+        roomId: string;
+        roomName: string;
+    }>;
+    /**
+     * 房间里的用户动作(进出房间)
+     * @type {EventHandler<{
+     *  targetUserId: string,
+     *  targetUserName: string,
+     *  action: "arrive" | "leave",
+     *  leaveForRoom?: {
+     *      roomId: string
+     *  }
+     * }>}
+     */
+    userInRoomAction: EventHandler<{
+        targetUserId: string;
+        targetUserName: string;
+        action: "arrive" | "leave";
+        leaveForRoom?: {
+            roomId: string;
+        };
+    }>;
+    /**
+     * 房间里的用户切换状态
+     * @type {EventHandler<{
+     *  targetUserId: string,
+     *  targetUserName: string,
+     *  fromState: reverseStateTable[string],
+     *  toState: reverseStateTable[string],
+     * }>}
+     */
+    userInRoomSwitchState: EventHandler<{
+        targetUserId: string;
+        targetUserName: string;
+        fromState: reverseStateTable[string];
+        toState: reverseStateTable[string];
+    }>;
+    /**
+     * 房间里的用户撤回消息
+     * @type {EventHandler<{
+     *  senderUid: string,
+     *  messageId: string
+     * }>}
+     */
+    withdrawRoomMessage: EventHandler<{
+        senderUid: string;
+        messageId: string;
+    }>;
+    /**
+     * 私聊中撤回消息
+     * @type {EventHandler<{
+     *  sessionUid: string,
+     *  senderUid: string,
+     *  messageId: string
+     * }>}
+     */
+    withdrawPrivateMessage: EventHandler<{
+        sessionUid: string;
+        senderUid: string;
+        messageId: string;
+    }>;
+    /**
+     * 收到保活包时
+     * @type {EventHandler<void>}
+     */
+    alive: EventHandler<void>;
+}
+type reverseStateTable = typeof reverseStateTable$1;
+
 /**
  * 协议上下文
  */
@@ -74,6 +253,16 @@ declare class IiroseProtocol {
      */
     logined: boolean;
     /**
+     * 选项
+     */
+    option: {
+        /**
+         * 活跃模式
+         * @type {boolean}
+         */
+        activeMode: boolean;
+    };
+    /**
      * 协议向服务器发送数据包
      * @type {EventHandler<Uint8Array>}
      */
@@ -81,81 +270,7 @@ declare class IiroseProtocol {
     /**
      * 所有事件
      */
-    event: {
-        /**
-         * 收到封包时触发
-         * @type {EventHandler<string>}
-         */
-        raw: EventHandler<string>;
-        /**
-         * 已登录
-         */
-        logined: EventHandler<unknown>;
-        /**
-         * 收到房间消息
-         * @type {EventHandler<{
-         *  senderId: string,
-         *  senderName: string,
-         *  content: string
-         * }>}
-         */
-        roomMessage: EventHandler<{
-            senderId: string;
-            senderName: string;
-            content: string;
-        }>;
-        /**
-         * 收到自己发送的房间消息
-         * @type {EventHandler<{ content: string }>}
-         */
-        selfRoomMessage: EventHandler<{
-            content: string;
-        }>;
-        /**
-         * 收到私聊消息
-         * @type {EventHandler<{
-         *  senderId: string,
-         *  senderName: string,
-         *  content: string
-         * }>}
-         */
-        privateMessage: EventHandler<{
-            senderId: string;
-            senderName: string;
-            content: string;
-        }>;
-        /**
-         * 接受到自己发送给自己的私聊消息
-         * @type {EventHandler<{ content: string }>}
-         */
-        selfPrivateMessage: EventHandler<{
-            content: string;
-        }>;
-        /**
-         * 收到全局频道(弹幕)消息
-         * @type {EventHandler<{
-         *  senderId: string,
-         *  senderName: string,
-         *  content: string
-         * }>}
-         */
-        globalChannelMessage: EventHandler<{
-            senderId: string;
-            senderName: string;
-            content: string;
-        }>;
-        /**
-         * 需要切换房间
-         * @type {EventHandler<{
-         *  roomId: string,
-         *  roomName: string
-         * }>}
-         */
-        switchRoom: EventHandler<{
-            roomId: string;
-            roomName: string;
-        }>;
-    };
+    event: ContextEvent;
     /**
      * 所有操作
      * @template F
@@ -165,15 +280,22 @@ declare class IiroseProtocol {
     operate: {
         sendRoomMessage: (content: string, messageColor?: string | undefined) => void;
         sendPrivateMessage: (targetId: string, content: string, messageColor?: string | undefined) => void;
+        demandMedia: (type: "video" | "music", info: {
+            mediaUrl: string;
+            durationInSeconds: number;
+            title?: string;
+            singerName?: string;
+            coverUrl?: string;
+            color?: string;
+            lyricsUrl?: string;
+        }, messageColor?: string | undefined) => void;
         buyRoseStock: (quantity: number) => void;
         sellRoseStock: (quantity: number) => void;
         getRoseStockInfo: () => Promise<{
             totalStockQuantity: number;
             totalStockValue: number;
             price: number;
-            holdingQuantity: number; /**
-             * 所有事件
-             */
+            holdingQuantity: number;
             accountBalance: number;
         }>;
         throwDice: (targetBot: "艾洛" | "艾莉" | "艾瑞" | "艾薇" | "艾泽" | "艾花" | "艾A" | "艾B") => void;
@@ -185,8 +307,9 @@ declare class IiroseProtocol {
      * @param {string} username
      * @param {string} password
      * @param {string} roomId
+     * @param {Object} [customInfo]
      */
-    login(username: string, password: string, roomId: string): Promise<void>;
+    login(username: string, password: string, roomId: string, customInfo?: any): Promise<void>;
     /**
      * 发送数据包
      * @param {string} data
