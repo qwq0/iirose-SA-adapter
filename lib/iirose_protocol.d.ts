@@ -95,6 +95,7 @@ declare class ContextEvent {
      * @type {EventHandler<{
      *  senderId: string,
      *  senderName: string,
+     *  senderAvatar: string,
      *  content: string,
      *  messageId: string
      * }>}
@@ -102,6 +103,7 @@ declare class ContextEvent {
     roomMessage: EventHandler<{
         senderId: string;
         senderName: string;
+        senderAvatar: string;
         content: string;
         messageId: string;
     }>;
@@ -121,6 +123,7 @@ declare class ContextEvent {
      * @type {EventHandler<{
      *  senderId: string,
      *  senderName: string,
+     *  senderAvatar: string,
      *  content: string,
      *  messageId: string
      * }>}
@@ -128,6 +131,24 @@ declare class ContextEvent {
     privateMessage: EventHandler<{
         senderId: string;
         senderName: string;
+        senderAvatar: string;
+        content: string;
+        messageId: string;
+    }>;
+    /**
+     * 其他设备此账号发给别人的私聊消息
+     * @type {EventHandler<{
+     *  targetId: string,
+     *  targetName: string,
+     *  targetAvatar: string,
+     *  content: string,
+     *  messageId: string
+     * }>}
+     */
+    selfSendPrivateMessage: EventHandler<{
+        targetId: string;
+        targetName: string;
+        targetAvatar: string;
         content: string;
         messageId: string;
     }>;
@@ -280,6 +301,7 @@ declare class IiroseProtocol {
     operate: {
         sendRoomMessage: (content: string, messageColor?: string | undefined) => void;
         sendPrivateMessage: (targetId: string, content: string, messageColor?: string | undefined) => void;
+        sendGlobalChannelMessage: (content: any, messageColor?: string | undefined) => void;
         demandMedia: (type: "video" | "music", info: {
             mediaUrl: string;
             durationInSeconds: number;

@@ -20,58 +20,98 @@ export interface api
          * 连接状态改变
          * 调用此方法将改变显示的连接状态
          */
-        connectionStateChange(state: "online" | "offline" | "connecting" | "waitingForLogin"): Promise<void>;
+        connectionStateChange(
+            e: {
+                state: "online" | "offline" | "connecting" | "waitingForLogin";
+            }
+        ): Promise<void>;
 
         /**
          * 收到消息
          */
-        receiveMessage(messageInfo: {
-            sessionId: string,
-            senderId: string,
-            messageContent: string,
-            messageId?: string,
-        }): Promise<void>;
+        receiveMessage(
+            e: {
+                sessionId: string;
+                senderId: string;
+                messageContent: string;
+                messageId?: string;
+                displayInfo?: {
+                    senderName?: string;
+                    senderAvatar?: string;
+                    sessionName?: string;
+                    sessionAvatar?: string;
+                };
+            }
+        ): Promise<void>;
 
         /**
          * 收到离线消息
          */
-        receiveOfflineMessage(messageInfo: {
-            sessionId: string,
-            senderId: string,
-            sendingTime: number,
-            messageContent: string,
-            messageId?: string,
-        }): Promise<void>;
+        receiveOfflineMessage(
+            e: {
+                sessionId: string;
+                senderId: string;
+                sendingTime: number;
+                messageContent: string;
+                messageId?: string;
+                displayInfo?: {
+                    senderName?: string;
+                    senderAvatar?: string;
+                    sessionName?: string;
+                    sessionAvatar?: string;
+                };
+            }
+        ): Promise<void>;
 
         /**
          * 登录指纹改变
          * 将在下次登录时传递给聊天服务
-         * @param fingerprint 为null表示清空指纹
-         * @param justFingerprint 为true表示登录时无需密码
          */
-        loginFingerprintChange(fingerprint: string | null, justFingerprint?: boolean): Promise<void>;
+        loginFingerprintChange(
+            e: {
+                /**
+                 * 为null表示清空指纹
+                 */
+                fingerprint: string | null;
+                /**
+                 * 为true表示登录时无需密码
+                 */
+                justFingerprint?: boolean;
+            }
+        ): Promise<void>;
     },
 
+
+    setEventListener<K extends keyof apiEventMap>(
+        eventName: K,
+        callback: (event: apiEventMap[K]["param"]) => Promise<apiEventMap[K]["ret"]> | apiEventMap[K]["ret"]
+    ): Promise<void>;
+};
+
+export interface apiEventMap
+{
     /**
      * 用户尝试登录
      */
-    setEventListener(eventName: "userlogin",
-        callback: (event: {
+    userlogin: {
+        param: {
             userId: string,
             password: string | null,
             fingerprint?: string,
-        }) => Promise<string | void>
-    ): Promise<void>;
+        };
+        ret: "succeed" | "fail";
+    },
 
     /**
      * 用户尝试发送文本消息
      * 应当返回发送成功或者失败
      * 返回当前消息的id
      */
-    setEventListener(eventName: "sendTextMessage",
-        callback: (event: {
+    sendTextMessage: {
+        param: {
             sessionId: string,
             messageContent: string,
-        }) => Promise<string | void>
-    ): Promise<void>;
+        };
+        ret: "succeed" | "fail";
+    },
 }

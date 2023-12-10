@@ -7111,7 +7111,7 @@ function MD5_32Char_lowerCase(s)
  * @param {string} content
  * @param {string} [messageColor]
  */
-function sendRoomMessage(context, content, messageColor = "#000000")
+function sendRoomMessage(context, content, messageColor = "000000")
 {
     content = String(content);
     if (content)
@@ -7131,7 +7131,7 @@ function sendRoomMessage(context, content, messageColor = "#000000")
  * @param {string} content
  * @param {string} [messageColor]
  */
-function sendPrivateMessage(context, targetId, content, messageColor = "#000000")
+function sendPrivateMessage(context, targetId, content, messageColor = "000000")
 {
     targetId = String(targetId);
     content = String(content);
@@ -7323,11 +7323,30 @@ function demandMedia(context, type, info, messageColor = "#000000")
 }
 
 /**
+ * 在全局频道发送消息
+ * @param {import("../context/IiroseProtocol").IiroseProtocol} context
+ */
+function sendGlobalChannelMessage(context, content, messageColor = "000000")
+{
+    content = String(content);
+    if (content)
+    {
+        context.sendPacket("~" + JSON.stringify({
+            "t": content,
+            "c": messageColor,
+            "v": 0
+        }));
+    }
+}
+
+/**
  * 操作列表
  */
 const operateList = {
     sendRoomMessage: sendRoomMessage,
     sendPrivateMessage: sendPrivateMessage,
+
+    sendGlobalChannelMessage: sendGlobalChannelMessage,
 
     demandMedia: demandMedia,
 
@@ -7613,12 +7632,14 @@ s2cTrie.addPath(`"`, (data) =>
             let senderId = part[8];
             let messageId = part[10];
             let senderName = htmlSpecialCharsDecode(part[2]);
+            let senderAvatar = htmlSpecialCharsDecode(part[1]);
             let content = htmlSpecialCharsDecode(part[3]);
 
             if (senderId != userId)
                 state.context.event.roomMessage.trigger({
                     senderId,
                     senderName,
+                    senderAvatar,
                     content,
                     messageId
                 });
@@ -7695,6 +7716,7 @@ s2cTrie.addPath(`""`, (data) =>
             let messageId = part[10];
             let receiverId = part[11];
             let senderName = htmlSpecialCharsDecode(part[2]);
+            let senderAvatar = htmlSpecialCharsDecode(part[3]);
             let content = htmlSpecialCharsDecode(part[4]);
 
             if (senderId != userId)
@@ -7702,6 +7724,7 @@ s2cTrie.addPath(`""`, (data) =>
                 state.context.event.privateMessage.trigger({
                     senderId,
                     senderName,
+                    senderAvatar,
                     content,
                     messageId
                 });
@@ -7713,7 +7736,18 @@ s2cTrie.addPath(`""`, (data) =>
                     messageId
                 });
             }
-            else ;
+            else if (senderId == userId && receiverId != userId)
+            { // 自己发送给别人的私聊消息
+                let receiverName = htmlSpecialCharsDecode(part[12]);
+                let receiverAvatar = htmlSpecialCharsDecode(part[15]);
+                state.context.event.selfSendPrivateMessage.trigger({
+                    content,
+                    messageId,
+                    targetId: receiverId,
+                    targetName: receiverName,
+                    targetAvatar: receiverAvatar
+                });
+            }
         }
         return data;
     });
@@ -7873,12 +7907,13 @@ class ContextEvent
      * @type {EventHandler<void>}
      */
     logined = new EventHandler();
-    
+
     /**
      * 收到房间消息
      * @type {EventHandler<{
      *  senderId: string,
      *  senderName: string,
+     *  senderAvatar: string,
      *  content: string,
      *  messageId: string
      * }>}
@@ -7899,11 +7934,24 @@ class ContextEvent
      * @type {EventHandler<{
      *  senderId: string,
      *  senderName: string,
+     *  senderAvatar: string,
      *  content: string,
      *  messageId: string
      * }>}
      */
     privateMessage = new EventHandler();
+
+    /**
+     * 其他设备此账号发给别人的私聊消息
+     * @type {EventHandler<{
+     *  targetId: string,
+     *  targetName: string,
+     *  targetAvatar: string,
+     *  content: string,
+     *  messageId: string
+     * }>}
+     */
+    selfSendPrivateMessage = new EventHandler();
 
     /**
      * 接受到自己发送给自己的私聊消息
@@ -7956,7 +8004,7 @@ class ContextEvent
      * }>}
      */
     userInRoomSwitchState = new EventHandler();
-    
+
     /**
      * 房间里的用户撤回消息
      * @type {EventHandler<{
@@ -8128,23 +8176,25 @@ class IiroseProtocol
 // @ts-ignore
 const saApi = api;
 
+/**
+ * @typedef {import("../lib/chatService.d.ts").apiEventMap} saEventMap
+ */
+
 (async () =>
 {
     let protocol = new IiroseProtocol();
     /** @type {WebSocket} */
     let ws = null;
-
-    let lastRawData = "";
     protocol.event.raw.add(data =>
     {
-        lastRawData = data;
+        console.log(`[iirose-protocol] raw`, [data]);
     });
     Object.keys(protocol.event).forEach(key =>
     {
         if (key != "raw")
             protocol.event[key].add(e =>
             {
-                console.log(`[iirose-protocol] event ${key}`, e, lastRawData);
+                console.log(`[iirose-protocol] event ${key}`, e);
             });
     });
 
@@ -8192,7 +8242,7 @@ const saApi = api;
         {
             if (ws == e.target)
             {
-                saApi.eventCallback.connectionStateChange("offline");
+                saApi.eventCallback.connectionStateChange({ state: "offline" });
                 reconnectingTimeoutId = setTimeout(() =>
                 {
                     reconnectingTimeoutId = null;
@@ -8205,7 +8255,7 @@ const saApi = api;
             }
         });
 
-        saApi.eventCallback.connectionStateChange("connecting");
+        saApi.eventCallback.connectionStateChange({ state: "connecting" });
 
         ws.addEventListener("open", e =>
         {
@@ -8221,6 +8271,40 @@ const saApi = api;
         userId = e.userId;
         userPassword = e.password;
         rebindWebSocket(e.userId, e.password, "");
+        return /** @type {"succeed"} */("succeed");
+    });
+
+    saApi.setEventListener("sendTextMessage", async e =>
+    {
+        let sessionIdPart = e.sessionId.split("-");
+        switch (sessionIdPart[0])
+        {
+            case "room": {
+                if (sessionIdPart[1] == protocol.roomId)
+                {
+                    protocol.operate.sendRoomMessage(e.messageContent);
+                    return "succeed";
+                }
+                else
+                    return "fail";
+            }
+            case "private": {
+                let targetUid = sessionIdPart[1];
+                protocol.operate.sendPrivateMessage(targetUid, e.messageContent);
+                saApi.eventCallback.receiveMessage({
+                    senderId: protocol.userId,
+                    messageContent: e.messageContent,
+                    sessionId: e.sessionId
+                });
+                return "succeed";
+            }
+            case "global": {
+                protocol.operate.sendGlobalChannelMessage(e.messageContent);
+                return "succeed";
+            }
+            default:
+                return "fail";
+        }
     });
 
     protocol.event.switchRoom.add(e =>
@@ -8230,48 +8314,82 @@ const saApi = api;
 
     protocol.event.logined.add(() =>
     {
-        saApi.eventCallback.connectionStateChange("online");
+        saApi.eventCallback.connectionStateChange({ state: "online" });
     });
 
     protocol.event.roomMessage.add(e =>
-    {
+    { // 房间内别人发送的消息
         saApi.eventCallback.receiveMessage({
             senderId: e.senderId,
             messageContent: e.content,
-            sessionId: "room-" + protocol.roomId
+            sessionId: "room-" + protocol.roomId,
+            displayInfo: {
+                senderName: e.senderName,
+                senderAvatar: (e.senderAvatar.startsWith("https://") || e.senderAvatar.startsWith("http://") ? e.senderAvatar : undefined),
+                sessionName: `房间 - ${protocol.roomId}`
+            }
         });
     });
 
 
     protocol.event.selfRoomMessage.add(e =>
-    {
+    { // 房间内自己发送的消息
         saApi.eventCallback.receiveMessage({
             senderId: protocol.userId,
             messageContent: e.content,
-            sessionId: "room-" + protocol.roomId
+            sessionId: "room-" + protocol.roomId,
+            displayInfo: {
+                senderName: protocol.userName,
+                sessionName: `房间 - ${protocol.roomId}`
+            }
         });
     });
 
     protocol.event.privateMessage.add(e =>
-    {
+    { // 私聊消息
+        let avatar = (e.senderAvatar.startsWith("https://") || e.senderAvatar.startsWith("http://") ? e.senderAvatar : undefined);
         saApi.eventCallback.receiveMessage({
             senderId: e.senderId,
             messageContent: e.content,
-            sessionId: "private-" + e.senderId
+            sessionId: "private-" + e.senderId,
+            displayInfo: {
+                senderName: e.senderName,
+                senderAvatar: avatar,
+                sessionName: `私聊 - ${e.senderName}`,
+                sessionAvatar: avatar,
+            }
+        });
+    });
+
+    protocol.event.selfSendPrivateMessage.add(e =>
+    { // 自己其他设备发送的私聊消息
+        saApi.eventCallback.receiveMessage({
+            senderId: protocol.userId,
+            messageContent: e.content,
+            sessionId: "private-" + e.targetId,
+            displayInfo: {
+                senderName: protocol.userName,
+                sessionName: `私聊 - ${e.targetName}`,
+                sessionAvatar: (e.targetAvatar.startsWith("https://") || e.targetAvatar.startsWith("http://") ? e.targetAvatar : undefined),
+            }
         });
     });
 
     protocol.event.globalChannelMessage.add(e =>
-    {
+    { // 全局频道消息
         saApi.eventCallback.receiveMessage({
             senderId: e.senderId,
             messageContent: e.content,
-            sessionId: "global"
+            sessionId: "global",
+            displayInfo: {
+                senderName: e.senderName,
+                sessionName: "全局频道 (弹幕)"
+            }
         });
     });
 
     console.log("[iirose_SA_adapter] on load");
 
     saApi.eventCallback.initComplete();
-    saApi.eventCallback.connectionStateChange("waitingForLogin");
+    saApi.eventCallback.connectionStateChange({ state: "waitingForLogin" });
 })();
